@@ -1,0 +1,15 @@
+# ---- PRIVACY: personal data never enters git ----
+# your real Amazon export goes here
+data/raw/
+# database built from real data
+data/real.db
+# dashboard rendered from real data
+local/
+# belt & suspenders: no CSVs or databases of any kind in git
+*.csv
+*.db
+# sample output is regenerable via `make demo`
+data/sample/
+
+.DS_Store
+__pycache__/

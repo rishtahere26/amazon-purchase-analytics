@@ -1,0 +1,371 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Amazon Spending Analytics</title>
+<script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.3/dist/chart.umd.min.js"></script>
+<style>
+:root{
+  --bg:#0d1117; --panel:#161b22; --panel2:#1c2330; --border:#2a3344;
+  --text:#e6edf3; --muted:#8b97a8; --accent:#ff9d3f; --accent2:#4cc9f0;
+  --green:#3fb97a; --red:#f0556b; --purple:#a78bfa;
+}
+*{margin:0;padding:0;box-sizing:border-box}
+body{background:var(--bg);color:var(--text);font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,Helvetica,Arial,sans-serif;line-height:1.5}
+.wrap{max-width:1180px;margin:0 auto;padding:0 24px 80px}
+header{padding:48px 0 8px}
+header h1{font-size:2.1rem;font-weight:800;letter-spacing:-.02em}
+header h1 span{color:var(--accent)}
+.sub{color:var(--muted);margin-top:6px;font-size:.95rem}
+.filterbar{position:sticky;top:0;z-index:50;background:rgba(13,17,23,.92);backdrop-filter:blur(8px);border-bottom:1px solid var(--border);margin:22px -24px 0;padding:12px 24px;display:flex;flex-wrap:wrap;gap:8px;align-items:center}
+.fbtn{background:var(--panel2);border:1px solid var(--border);color:var(--muted);border-radius:999px;padding:6px 14px;font-size:.82rem;cursor:pointer;transition:.15s}
+.fbtn:hover{color:var(--text);border-color:var(--accent)}
+.fbtn.active{background:var(--accent);color:#0d1117;border-color:var(--accent);font-weight:700}
+.fdates{display:flex;gap:6px;align-items:center;margin-left:auto}
+.fdates input{background:var(--panel2);border:1px solid var(--border);color:var(--text);border-radius:8px;padding:5px 8px;font-size:.82rem;color-scheme:dark}
+.fdates label{font-size:.78rem;color:var(--muted)}
+#rangeInfo{width:100%;font-size:.78rem;color:var(--muted)}
+#rangeInfo b{color:var(--accent2)}
+h2{font-size:1.15rem;font-weight:700;margin:46px 0 16px;display:flex;align-items:center;gap:10px}
+h2::before{content:"";width:5px;height:20px;background:var(--accent);border-radius:3px}
+.kpis{display:grid;grid-template-columns:repeat(auto-fit,minmax(165px,1fr));gap:14px;margin-top:26px}
+.kpi{background:var(--panel);border:1px solid var(--border);border-radius:14px;padding:18px}
+.kpi .v{font-size:1.45rem;font-weight:800;letter-spacing:-.01em}
+.kpi .l{color:var(--muted);font-size:.78rem;margin-top:4px;text-transform:uppercase;letter-spacing:.06em}
+.kpi.hero .v{color:var(--accent)} .kpi.net .v{color:var(--green)} .kpi.ref .v{color:var(--red)}
+.grid2{display:grid;grid-template-columns:1fr 1fr;gap:16px}
+.grid32{display:grid;grid-template-columns:3fr 2fr;gap:16px}
+@media(max-width:820px){.grid2,.grid32{grid-template-columns:1fr}.fdates{margin-left:0}}
+.panel{background:var(--panel);border:1px solid var(--border);border-radius:14px;padding:20px}
+.panel h3{font-size:.92rem;font-weight:600;color:var(--muted);margin-bottom:14px}
+.chartbox{position:relative;height:300px}
+.chartbox.tall{height:340px}
+.insights{display:grid;grid-template-columns:1fr 1fr;gap:14px}
+@media(max-width:820px){.insights{grid-template-columns:1fr}}
+.insight{background:var(--panel);border:1px solid var(--border);border-left:4px solid var(--accent);border-radius:12px;padding:18px}
+.insight h4{font-size:.98rem;margin-bottom:6px}
+.insight p{color:var(--muted);font-size:.88rem}
+.insight.blue{border-left-color:var(--accent2)} .insight.green{border-left-color:var(--green)}
+.insight.red{border-left-color:var(--red)} .insight.purple{border-left-color:var(--purple)}
+.facts{display:grid;grid-template-columns:repeat(auto-fit,minmax(200px,1fr));gap:14px}
+.fact{background:var(--panel2);border:1px solid var(--border);border-radius:12px;padding:16px;text-align:center}
+.fact .v{font-size:1.25rem;font-weight:800;color:var(--accent2)}
+.fact .l{font-size:.78rem;color:var(--muted);margin-top:4px}
+footer{margin-top:70px;color:var(--muted);font-size:.8rem;text-align:center;border-top:1px solid var(--border);padding-top:24px}
+</style>
+</head>
+<body>
+<div class="wrap">
+
+<header>
+  <h1>📦 Amazon <span>Spending Analytics</span></h1>
+  <div class="sub">A personal deep dive into purchase behavior — fully anonymized, no products, order IDs, or personal data.</div>
+</header>
+
+<div class="filterbar" id="filterbar">
+  <span id="presets"></span>
+  <div class="fdates">
+    <label>From</label><input type="date" id="dFrom">
+    <label>To</label><input type="date" id="dTo">
+    <button class="fbtn" id="applyBtn">Apply</button>
+  </div>
+  <div id="rangeInfo"></div>
+</div>
+
+<div class="kpis" id="kpis"></div>
+
+<h2>Spending Over Time</h2>
+<div class="panel">
+  <h3>Monthly spend (gross) with orders per month</h3>
+  <div class="chartbox tall"><canvas id="cMonthly"></canvas></div>
+</div>
+<div class="grid2" style="margin-top:16px">
+  <div class="panel"><h3 id="hYearly">Yearly: spent vs refunded</h3><div class="chartbox"><canvas id="cYearly"></canvas></div></div>
+  <div class="panel"><h3>Category mix over time (top 6)</h3><div class="chartbox"><canvas id="cCatTrend"></canvas></div></div>
+</div>
+
+<h2>What the Money Goes To</h2>
+<div class="grid32">
+  <div class="panel"><h3>Spend by category</h3><div class="chartbox tall"><canvas id="cCats"></canvas></div></div>
+  <div class="panel"><h3>Item price distribution</h3><div class="chartbox tall"><canvas id="cBands"></canvas></div></div>
+</div>
+
+<h2>Shopping Rhythm</h2>
+<div class="grid2">
+  <div class="panel"><h3>Spend by day of week</h3><div class="chartbox"><canvas id="cDow"></canvas></div></div>
+  <div class="panel"><h3>Purchases by hour of day (local time)</h3><div class="chartbox"><canvas id="cHours"></canvas></div></div>
+</div>
+<div class="facts" style="margin-top:16px" id="facts"></div>
+
+<h2>Returns &amp; Refunds</h2>
+<div class="grid32">
+  <div class="panel"><h3>Refunded vs kept (share of gross spend)</h3><div class="chartbox"><canvas id="cKept"></canvas></div></div>
+  <div class="panel"><h3>Refund reasons (refund transactions)</h3><div class="chartbox"><canvas id="cReasons"></canvas></div></div>
+</div>
+
+<h2>Payment Mix</h2>
+<div class="grid32">
+  <div class="panel"><h3>Items by payment method</h3><div class="chartbox"><canvas id="cPay"></canvas></div></div>
+  <div class="panel" id="payNote"></div>
+</div>
+
+<h2>Insights</h2>
+<div class="insights" id="insights"></div>
+
+<footer>
+  Generated <span id="genDate"></span> from an Amazon "Your Orders" data export · Aggregated metrics only — refunds are attributed to the date the order was placed. · Built with Chart.js
+</footer>
+</div>
+
+<script>
+const D = /*__DATA__*/;
+
+// ---------- helpers ----------
+const fmt$ = v => "$" + Number(v).toLocaleString("en-US",{maximumFractionDigits:0});
+const fmt$2 = v => "$" + Number(v).toLocaleString("en-US",{minimumFractionDigits:2,maximumFractionDigits:2});
+const css = v => getComputedStyle(document.documentElement).getPropertyValue(v).trim();
+const C = {acc:css("--accent"),acc2:css("--accent2"),green:css("--green"),red:css("--red"),purple:css("--purple"),muted:css("--muted"),border:css("--border"),text:css("--text")};
+const PALETTE = [C.acc,C.acc2,C.green,C.purple,C.red,"#e8c547","#7c8aa0","#d97fb0","#6ee7b7","#fca5a5","#93c5fd","#fcd34d"];
+Chart.defaults.color = C.muted;
+Chart.defaults.borderColor = C.border;
+Chart.defaults.font.family = getComputedStyle(document.body).fontFamily;
+document.getElementById("genDate").textContent = D.meta.generated;
+
+// item fields: [orderIdx, date, hour, total, catIdx, payIdx, shipChg]
+const I = {O:0, DATE:1, HOUR:2, TOT:3, CAT:4, PAY:5, SHIP:6};
+const allDates = D.items.map(it=>it[I.DATE]);
+const MIN = allDates.reduce((a,b)=>a<b?a:b), MAX = allDates.reduce((a,b)=>a>b?a:b);
+// orderIdx -> order date (earliest item date)
+const orderDate = {};
+for (const it of D.items){
+  const o = it[I.O];
+  if (!(o in orderDate) || it[I.DATE] < orderDate[o]) orderDate[o] = it[I.DATE];
+}
+
+// ---------- filter state ----------
+let from = MIN, to = MAX;
+const charts = {};
+function mkChart(id, cfg){
+  if (charts[id]) charts[id].destroy();
+  charts[id] = new Chart(document.getElementById(id), cfg);
+}
+
+// ---------- presets ----------
+const years = [...new Set(allDates.map(d=>d.slice(0,4)))].sort();
+const presets = [["All time", MIN, MAX]];
+{ // last 12 months from MAX
+  const d = new Date(MAX+"T00:00:00"); d.setFullYear(d.getFullYear()-1);
+  presets.push(["Last 12 mo", d.toISOString().slice(0,10), MAX]);
+}
+for (const y of [...years].reverse()) presets.push([y, y+"-01-01", y+"-12-31"]);
+const presetBox = document.getElementById("presets");
+presetBox.innerHTML = presets.map(([l],i)=>`<button class="fbtn preset" data-i="${i}">${l}</button>`).join(" ");
+presetBox.addEventListener("click", e=>{
+  const b = e.target.closest(".preset"); if(!b) return;
+  const [,f,t] = presets[+b.dataset.i];
+  from = f<MIN?MIN:f; to = t>MAX?MAX:t;
+  document.getElementById("dFrom").value = from;
+  document.getElementById("dTo").value = to;
+  render(+b.dataset.i);
+});
+document.getElementById("applyBtn").addEventListener("click", ()=>{
+  const f = document.getElementById("dFrom").value, t = document.getElementById("dTo").value;
+  if (f) from = f; if (t) to = t;
+  if (from > to) [from, to] = [to, from];
+  render(-1);
+});
+document.getElementById("dFrom").min = MIN; document.getElementById("dFrom").max = MAX;
+document.getElementById("dTo").min = MIN; document.getElementById("dTo").max = MAX;
+
+// ---------- compute + render ----------
+function monthKeys(f, t){
+  const out = []; let y=+f.slice(0,4), m=+f.slice(5,7);
+  const end = t.slice(0,7);
+  while (true){ const k = y+"-"+String(m).padStart(2,"0"); out.push(k); if (k>=end) break; m++; if(m===13){m=1;y++;} }
+  return out;
+}
+
+function render(activePreset){
+  document.querySelectorAll(".preset").forEach((b,i)=>b.classList.toggle("active", i===activePreset));
+
+  const items = D.items.filter(it => it[I.DATE] >= from && it[I.DATE] <= to);
+  const refs  = D.refunds.filter(r => { const d = orderDate[r[0]]; return d >= from && d <= to; });
+  const cancelled = D.cancelledDates.filter(d => d >= from && d <= to).length;
+
+  const spend = items.reduce((s,it)=>s+it[I.TOT],0);
+  const orderSet = new Map();
+  for (const it of items) orderSet.set(it[I.O], (orderSet.get(it[I.O])||0)+it[I.TOT]);
+  const nOrders = orderSet.size, nItems = items.length;
+  const refunded = refs.reduce((s,r)=>s+r[1],0);
+  const refOrders = new Set(refs.map(r=>r[0])).size;
+  const net = spend - refunded;
+  const refPct = spend ? (100*refunded/spend) : 0;
+
+  document.getElementById("rangeInfo").innerHTML =
+    `Showing <b>${from}</b> → <b>${to}</b> · ${nItems.toLocaleString()} items · ${nOrders.toLocaleString()} orders`;
+
+  // KPIs
+  const mk = monthKeys(from, to);
+  document.getElementById("kpis").innerHTML = (nItems===0)
+    ? `<div class="kpi"><div class="v">—</div><div class="l">No purchases in this range</div></div>`
+    : [
+      ["hero", fmt$(spend), "Gross spend"],
+      ["net", fmt$(net), "Net spend (after refunds)"],
+      ["ref", fmt$(refunded), `Refunded (${refPct.toFixed(1)}%)`],
+      ["", nOrders.toLocaleString(), "Orders"],
+      ["", nItems.toLocaleString(), "Items"],
+      ["", fmt$2(nOrders?spend/nOrders:0), "Avg order value"],
+      ["", fmt$(spend/mk.length), "Avg spend / month"],
+      ["", cancelled, "Cancelled items"],
+    ].map(([c,v,l])=>`<div class="kpi ${c}"><div class="v">${v}</div><div class="l">${l}</div></div>`).join("");
+
+  // monthly series
+  const mSpend = Object.fromEntries(mk.map(k=>[k,0]));
+  const mOrders = Object.fromEntries(mk.map(k=>[k,new Set()]));
+  for (const it of items){ const k = it[I.DATE].slice(0,7); mSpend[k]+=it[I.TOT]; mOrders[k].add(it[I.O]); }
+  mkChart("cMonthly", {data:{labels: mk, datasets:[
+    {type:"line",label:"Spend",data:mk.map(k=>+mSpend[k].toFixed(2)),borderColor:C.acc,backgroundColor:C.acc+"33",fill:true,tension:.3,pointRadius:mk.length>40?0:2,borderWidth:2,yAxisID:"y"},
+    {type:"bar",label:"Orders",data:mk.map(k=>mOrders[k].size),backgroundColor:C.acc2+"55",yAxisID:"y1"}]},
+    options:{maintainAspectRatio:false,interaction:{mode:"index",intersect:false},
+      scales:{y:{ticks:{callback:fmt$}},y1:{position:"right",grid:{display:false}}},
+      plugins:{legend:{labels:{boxWidth:12}}}}});
+
+  // yearly (or monthly if single year) spent vs refunded
+  const refByOrder = {};
+  for (const r of refs) refByOrder[r[0]] = (refByOrder[r[0]]||0)+r[1];
+  const multiYear = from.slice(0,4) !== to.slice(0,4);
+  const bucket = d => multiYear ? d.slice(0,4) : d.slice(0,7);
+  const bKeys = multiYear ? [...new Set(mk.map(k=>k.slice(0,4)))] : mk;
+  const bSpend = Object.fromEntries(bKeys.map(k=>[k,0]));
+  const bRef = Object.fromEntries(bKeys.map(k=>[k,0]));
+  for (const it of items) bSpend[bucket(it[I.DATE])] += it[I.TOT];
+  for (const r of refs){ const k = bucket(orderDate[r[0]]); if (k in bRef) bRef[k] += r[1]; }
+  document.getElementById("hYearly").textContent = (multiYear?"Yearly":"Monthly")+": spent vs refunded";
+  mkChart("cYearly",{type:"bar",data:{labels:bKeys,datasets:[
+    {label:"Spent",data:bKeys.map(k=>+bSpend[k].toFixed(2)),backgroundColor:C.acc,borderRadius:6},
+    {label:"Refunded",data:bKeys.map(k=>+bRef[k].toFixed(2)),backgroundColor:C.red+"cc",borderRadius:6}]},
+    options:{maintainAspectRatio:false,scales:{y:{ticks:{callback:fmt$}}},plugins:{legend:{labels:{boxWidth:12}}}}});
+
+  // categories
+  const catSpend = {}, catN = {};
+  for (const it of items){ const c = D.catNames[it[I.CAT]]; catSpend[c]=(catSpend[c]||0)+it[I.TOT]; catN[c]=(catN[c]||0)+1; }
+  const cats = Object.entries(catSpend).map(([name,s])=>({name,spend:s,items:catN[name]})).sort((a,b)=>b.spend-a.spend);
+  mkChart("cCats",{type:"bar",data:{labels:cats.map(c=>c.name),
+    datasets:[{label:"Spend",data:cats.map(c=>+c.spend.toFixed(2)),backgroundColor:cats.map((_,i)=>PALETTE[i%PALETTE.length]+"dd"),borderRadius:6}]},
+    options:{indexAxis:"y",maintainAspectRatio:false,scales:{x:{ticks:{callback:fmt$}}},
+      plugins:{legend:{display:false},tooltip:{callbacks:{afterLabel:ctx=>`${cats[ctx.dataIndex].items} items`}}}}});
+
+  // category trend (top 6) over buckets
+  const top6 = cats.slice(0,6).map(c=>c.name);
+  const trend = Object.fromEntries(top6.map(c=>[c, Object.fromEntries(bKeys.map(k=>[k,0]))]));
+  for (const it of items){ const c = D.catNames[it[I.CAT]]; if (trend[c]) trend[c][bucket(it[I.DATE])] += it[I.TOT]; }
+  mkChart("cCatTrend",{type:"bar",data:{labels:bKeys,
+    datasets:top6.map((c,i)=>({label:c,data:bKeys.map(k=>+trend[c][k].toFixed(2)),backgroundColor:PALETTE[i%6],borderRadius:3}))},
+    options:{maintainAspectRatio:false,scales:{x:{stacked:true},y:{stacked:true,ticks:{callback:fmt$}}},plugins:{legend:{labels:{boxWidth:12}}}}});
+
+  // price bands
+  const bandDefs = [[0,10],[10,25],[25,50],[50,100],[100,250],[250,1e12]];
+  const bandLabels = ["<$10","$10–25","$25–50","$50–100","$100–250","$250+"];
+  const bandCounts = bandDefs.map(()=>0);
+  for (const it of items) for (let bi=0; bi<bandDefs.length; bi++)
+    if (it[I.TOT]>=bandDefs[bi][0] && it[I.TOT]<bandDefs[bi][1]){ bandCounts[bi]++; break; }
+  mkChart("cBands",{type:"bar",data:{labels:bandLabels,datasets:[{label:"Items",data:bandCounts,backgroundColor:C.acc2,borderRadius:6}]},
+    options:{maintainAspectRatio:false,plugins:{legend:{display:false}}}});
+
+  // day of week / hours
+  const dow=[0,0,0,0,0,0,0], dowN=[0,0,0,0,0,0,0], hours=Array(24).fill(0);
+  for (const it of items){
+    const wd = (new Date(it[I.DATE]+"T12:00:00").getDay()+6)%7; // Mon=0
+    dow[wd]+=it[I.TOT]; dowN[wd]++; hours[it[I.HOUR]]++;
+  }
+  const dowLabels=["Mon","Tue","Wed","Thu","Fri","Sat","Sun"];
+  mkChart("cDow",{type:"bar",data:{labels:dowLabels,
+    datasets:[{label:"Spend",data:dow.map(v=>+v.toFixed(2)),backgroundColor:dowLabels.map((_,i)=>i>=5?C.purple:C.acc),borderRadius:6}]},
+    options:{maintainAspectRatio:false,scales:{y:{ticks:{callback:fmt$}}},
+      plugins:{legend:{display:false},tooltip:{callbacks:{afterLabel:ctx=>`${dowN[ctx.dataIndex]} items`}}}}});
+  mkChart("cHours",{type:"bar",data:{labels:[...Array(24).keys()].map(h=>h+":00"),
+    datasets:[{label:"Items",data:hours,backgroundColor:[...Array(24).keys()].map(h=>(h>=22||h<4)?C.red:C.acc2),borderRadius:3}]},
+    options:{maintainAspectRatio:false,plugins:{legend:{display:false}}}});
+
+  // behavior facts
+  const lateN = items.filter(it=>it[I.HOUR]>=22||it[I.HOUR]<4).length;
+  const wkndSpend = dow[5]+dow[6];
+  const dayList = [...new Set(items.map(it=>it[I.DATE]))].sort();
+  let maxStreak = dayList.length?1:0, st=1, maxGap=0;
+  for (let i=1;i<dayList.length;i++){
+    const diff = (new Date(dayList[i])-new Date(dayList[i-1]))/864e5;
+    if (diff===1){st++; maxStreak=Math.max(maxStreak,st);} else st=1;
+    maxGap=Math.max(maxGap,diff);
+  }
+  const daySpend={};
+  for (const it of items) daySpend[it[I.DATE]]=(daySpend[it[I.DATE]]||0)+it[I.TOT];
+  const busiest = Object.entries(daySpend).sort((a,b)=>b[1]-a[1])[0]||["—",0];
+  const bestMonth = mk.map(k=>[k,mSpend[k]]).sort((a,b)=>b[1]-a[1])[0]||["—",0];
+  document.getElementById("facts").innerHTML = [
+    [(nItems?(100*lateN/nItems).toFixed(1):0)+"%","of purchases happen 10pm–4am"],
+    [(spend?(100*wkndSpend/spend).toFixed(1):0)+"%","of spend lands on weekends"],
+    [maxStreak+" days","longest daily buying streak"],
+    [maxGap+" days","longest break from Amazon"],
+    [fmt$(busiest[1]),"biggest single day ("+busiest[0]+")"],
+    [fmt$(bestMonth[1]),"biggest month ("+bestMonth[0]+")"],
+  ].map(([v,l])=>`<div class="fact"><div class="v">${v}</div><div class="l">${l}</div></div>`).join("");
+
+  // kept vs refunded
+  mkChart("cKept",{type:"doughnut",data:{labels:["Kept","Refunded"],
+    datasets:[{data:[+net.toFixed(2),+refunded.toFixed(2)],backgroundColor:[C.green,C.red],borderWidth:0}]},
+    options:{maintainAspectRatio:false,cutout:"62%",plugins:{legend:{position:"bottom"},
+      tooltip:{callbacks:{label:ctx=>` ${ctx.label}: ${fmt$(ctx.raw)} (${spend?(100*ctx.raw/spend).toFixed(1):0}%)`}}}}});
+
+  // refund reasons
+  const reasonN = {};
+  for (const r of refs){ const n = D.reasonNames[r[2]]; reasonN[n]=(reasonN[n]||0)+1; }
+  const reasons = Object.entries(reasonN).sort((a,b)=>b[1]-a[1]).slice(0,6);
+  mkChart("cReasons",{type:"bar",data:{labels:reasons.map(r=>r[0]),
+    datasets:[{label:"Refunds",data:reasons.map(r=>r[1]),backgroundColor:C.red+"cc",borderRadius:6}]},
+    options:{indexAxis:"y",maintainAspectRatio:false,plugins:{legend:{display:false}}}});
+
+  // payments
+  const payN = {};
+  for (const it of items){ const p = D.payNames[it[I.PAY]]; payN[p]=(payN[p]||0)+1; }
+  const pays = Object.entries(payN).sort((a,b)=>b[1]-a[1]).slice(0,8);
+  mkChart("cPay",{type:"doughnut",data:{labels:pays.map(p=>p[0]),
+    datasets:[{data:pays.map(p=>p[1]),backgroundColor:PALETTE,borderWidth:0}]},
+    options:{maintainAspectRatio:false,cutout:"55%",plugins:{legend:{position:"right",labels:{boxWidth:12}}}}});
+  document.getElementById("payNote").innerHTML = pays.length
+    ? `<h3>Reading the mix</h3><p style="color:var(--muted);font-size:.9rem">Share of items by payment method (card networks only — no card details). In this range the top method covers <b style="color:var(--text)">${Math.round(100*pays[0][1]/nItems)}%</b> of items.</p>`
+    : "";
+
+  // insights
+  const spanDays = Math.max(1, (new Date(to)-new Date(from))/864e5 + 1);
+  const shipPaid = items.reduce((s,it)=>s+it[I.SHIP],0);
+  const freeShipPct = nItems ? (100*items.filter(it=>it[I.SHIP]<=0).length/nItems) : 0;
+  const top1 = cats[0], top2 = cats[1];
+  const ins = [];
+  if (nItems){
+    ins.push(["red","The buy-to-try shopper",
+      `${refPct.toFixed(1)}% of every dollar spent in this range comes back as a refund — ${refOrders} of ${nOrders} orders (${Math.round(100*refOrders/nOrders)}%) at least partially refunded. Gross spend says ${fmt$(spend)}, but the real cost was ${fmt$(net)}.`]);
+    if (top1) ins.push(["", top2?"Two categories rule":"One category rules",
+      top2 ? `${top1.name} (${fmt$(top1.spend)}) and ${top2.name} (${fmt$(top2.spend)}) together account for ${Math.round(100*(top1.spend+top2.spend)/spend)}% of spend in this range.`
+           : `${top1.name} accounts for ${Math.round(100*top1.spend/spend)}% of spend in this range.`]);
+    ins.push(["blue","Night-owl ordering",
+      `${(100*lateN/nItems).toFixed(1)}% of items are ordered between 10pm and 4am in this range.`]);
+    ins.push(["purple","Shopping frequency",
+      `Orders were placed on ${dayList.length} different days — ${(100*dayList.length/spanDays).toFixed(0)}% of the days in this range — longest daily streak ${maxStreak} days, longest pause ${maxGap} days.`]);
+    ins.push(["green","Shipping discipline",
+      `${freeShipPct.toFixed(1)}% of items shipped free; total shipping ever paid in range: ${fmt$2(shipPaid)}.`]);
+    ins.push(["","Spikes",
+      `Biggest single day: ${busiest[0]} (${fmt$(busiest[1])}). Biggest month: ${bestMonth[0]} at ${fmt$(bestMonth[1])}.`]);
+  }
+  document.getElementById("insights").innerHTML =
+    ins.map(([c,h,p])=>`<div class="insight ${c}"><h4>${h}</h4><p>${p}</p></div>`).join("") ||
+    `<div class="insight"><h4>No data</h4><p>No purchases in the selected range.</p></div>`;
+}
+
+// init
+document.getElementById("dFrom").value = MIN;
+document.getElementById("dTo").value = MAX;
+render(0);
+</script>
+</body>
+</html>
